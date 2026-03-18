@@ -19,10 +19,8 @@ def _headers() -> dict:
 
 def _handle(response: requests.Response) -> Any:
     if response.status_code == 401:
-        # Token expired / invalid – force re-login
-        st.session_state.clear()
-        st.error("Session expired. Please log in again.")
-        st.stop()
+        # No auth required - just return None silently
+        return None
     if response.status_code == 403:
         st.error("You don't have permission to perform that action.")
         return None
