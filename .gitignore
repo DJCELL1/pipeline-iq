@@ -1,0 +1,40 @@
+# Environment files (contain secrets — never commit these)
+.env
+*.env
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Alembic — don't ignore versions, but ignore any local overrides
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Streamlit cache
+.streamlit/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
