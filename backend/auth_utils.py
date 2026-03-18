@@ -16,7 +16,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", "8"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -38,28 +38,31 @@ def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        return {}
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    payload = decode_token(token)
-    user_id: int = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="User not found or inactive")
-    return user
+    # No login required — return the admin user as the default actor
+    if token:
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id:
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            if user and user.is_active:
+                return user
+    # Fall back to first admin user in the database
+    admin = db.query(User).filter(User.role == "admin").first()
+    if admin:
+        return admin
+    # Last resort: return any active user
+    user = db.query(User).filter(User.is_active == True).first()
+    if user:
+        return user
+    raise HTTPException(status_code=500, detail="No users found in database. Run seed.py first.")
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role.value != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
+    return current_user  # all users treated as admin since no login required
