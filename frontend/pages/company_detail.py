@@ -72,10 +72,15 @@ def show():
     # Flags
     flags = company.get("flags", [])
     if flags:
+        default_flag = ('', '', '#aaa')
         badge_html = " ".join(
-            f"<span style='background:{FLAG_INFO.get(f, ('','',\"#aaa\"))[2]};color:white;"
-            f"padding:3px 10px;border-radius:12px;font-size:0.8em;margin-right:4px'>"
-            f"{FLAG_INFO.get(f,('','',''))[0]} {FLAG_INFO.get(f,('',f,''))[1]}</span>"
+            "<span style='background:{};color:white;"
+            "padding:3px 10px;border-radius:12px;font-size:0.8em;margin-right:4px'>"
+            "{} {}</span>".format(
+                FLAG_INFO.get(f, default_flag)[2],
+                FLAG_INFO.get(f, default_flag)[0],
+                FLAG_INFO.get(f, ('', f, ''))[1],
+            )
             for f in flags
         )
         st.markdown(badge_html, unsafe_allow_html=True)
