@@ -31,8 +31,8 @@ desktop.ini
 # Logs
 *.log
 
-# Streamlit cache
-.streamlit/
+# Streamlit cache (keep config.toml in repo for Streamlit Cloud)
+.streamlit/secrets.toml
 
 # Pytest / coverage
 .pytest_cache/
