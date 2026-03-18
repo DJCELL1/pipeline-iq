@@ -154,6 +154,11 @@ def update_job(job_id: int, data: dict) -> Optional[dict]:
     return _handle(r)
 
 
+def delete_job(job_id: int) -> bool:
+    r = requests.delete(f"{BACKEND_URL}/jobs/{job_id}", headers=_headers())
+    return _handle(r) is True
+
+
 def import_jobs(rows: list) -> Optional[dict]:
     r = requests.post(f"{BACKEND_URL}/jobs/import", headers=_headers(), json=rows)
     return _handle(r)

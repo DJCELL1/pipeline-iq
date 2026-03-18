@@ -67,11 +67,30 @@ def show_job_detail(job_id: int):
         st.error("Job not found.")
         return
 
-    col_back, col_status = st.columns([3, 1])
+    col_back, col_status, col_del = st.columns([3, 1, 1])
     with col_back:
         if st.button("← Back to Job Log"):
             st.session_state.pop("selected_job_id", None)
             st.rerun()
+
+    with col_del:
+        if st.button("🗑️ Delete Job", type="secondary", use_container_width=True):
+            st.session_state[f"confirm_delete_{job_id}"] = True
+
+        if st.session_state.get(f"confirm_delete_{job_id}"):
+            st.warning("Are you sure?")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Yes, delete", key=f"yes_del_{job_id}", type="primary"):
+                    api.delete_job(job_id)
+                    st.session_state.pop("selected_job_id", None)
+                    st.session_state.pop(f"confirm_delete_{job_id}", None)
+                    st.success("Job deleted.")
+                    st.rerun()
+            with c2:
+                if st.button("Cancel", key=f"no_del_{job_id}"):
+                    st.session_state.pop(f"confirm_delete_{job_id}", None)
+                    st.rerun()
 
     with col_status:
         new_status = st.selectbox("Status", STATUS_OPTIONS[1:],
