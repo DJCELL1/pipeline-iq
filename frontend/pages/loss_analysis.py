@@ -46,6 +46,43 @@ def show():
         else:
             st.info("No data yet.")
 
+    # ── Win vs Loss by $ Value over time ─────────────────────────────────────
+    st.subheader("Won vs Lost — $ Value by Month")
+    all_jobs_combined = api.get_jobs()
+    if all_jobs_combined:
+        value_by_month = {}
+        for j in all_jobs_combined:
+            date_str = (j.get("quote_date") or "")[:7]  # YYYY-MM
+            if not date_str:
+                continue
+            val = j.get("quote_value") or 0
+            status = j.get("status", "")
+            if date_str not in value_by_month:
+                value_by_month[date_str] = {"month": date_str, "won_value": 0, "lost_value": 0}
+            if status in ("won", "in_delivery", "invoiced", "complete"):
+                value_by_month[date_str]["won_value"] += val
+            elif status == "lost":
+                value_by_month[date_str]["lost_value"] += val
+
+        df_val = pd.DataFrame(sorted(value_by_month.values(), key=lambda x: x["month"]))
+        if not df_val.empty:
+            fig = go.Figure()
+            fig.add_bar(name="Won ($)", x=df_val["month"], y=df_val["won_value"],
+                        marker_color="#2ecc71", opacity=0.85)
+            fig.add_bar(name="Lost ($)", x=df_val["month"], y=df_val["lost_value"],
+                        marker_color="#e74c3c", opacity=0.85)
+            fig.update_layout(
+                barmode="group", height=340,
+                margin=dict(t=10, b=10, l=0, r=0),
+                yaxis_title="$ Value",
+                yaxis_tickprefix="$",
+                yaxis_tickformat=",.0f",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No data yet.")
+
     st.divider()
 
     # ── Companies we lose most with ───────────────────────────────────────────
