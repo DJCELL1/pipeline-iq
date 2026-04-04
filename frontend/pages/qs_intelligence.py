@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import pandas as pd
 from utils.auth import require_auth, get_user
 from utils import api_client as api
+from utils.data import get_all_companies, get_all_qs
 
 FLAG_INFO = {
     "loyal":        ("🟢", "Loyal",        "#2ecc71"),
@@ -48,10 +49,10 @@ def show_qs_detail(qs_id: int):
         st.error("QS not found.")
         return
 
-    st.button("← QS Intelligence", on_click=lambda: (
-        st.session_state.update(selected_qs_id=None),
+    if st.button("← QS Intelligence"):
+        st.session_state.pop("selected_qs_id", None)
         st.rerun()
-    ))
+
     st.title(qs["name"])
     if qs.get("company_name"):
         st.caption(f"Company: **{qs['company_name']}**")
@@ -60,7 +61,6 @@ def show_qs_detail(qs_id: int):
     if qs.get("phone"):
         st.caption(f"📞 {qs['phone']}")
 
-    # Flags
     flags = qs.get("flags", [])
     if flags:
         badge_html = " ".join(
@@ -72,7 +72,6 @@ def show_qs_detail(qs_id: int):
         st.markdown(badge_html, unsafe_allow_html=True)
         st.write("")
 
-    # Win rate summary
     total = qs.get("total_jobs", 0)
     won   = qs.get("won_jobs", 0)
     wr    = qs.get("win_rate")
@@ -91,7 +90,6 @@ def show_qs_detail(qs_id: int):
     with g5: st.plotly_chart(gauge("Overall",           scores.get("overall_score")),        use_container_width=True)
 
     st.divider()
-
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
@@ -101,8 +99,7 @@ def show_qs_detail(qs_id: int):
             for j in jobs:
                 icon = STATUS_ICON.get(j["status"], "•")
                 val  = f"${j['quote_value']:,.0f}" if j.get("quote_value") else "—"
-                co_n = j.get("company_name") or "—"
-                st.markdown(f"{icon} **{j['job_number']}** {j['job_name'][:45]}  |  {val}  |  {co_n}")
+                st.markdown(f"{icon} **{j['job_number']}** {j['job_name'][:45]}  |  {val}  |  {j.get('company_name') or '—'}")
         else:
             st.info("No jobs on record.")
 
@@ -130,7 +127,6 @@ def show_qs_detail(qs_id: int):
 def show():
     require_auth()
 
-    # If a QS is selected, show detail
     selected_qs_id = st.session_state.get("selected_qs_id")
     if selected_qs_id:
         show_qs_detail(selected_qs_id)
@@ -148,7 +144,8 @@ def show():
         st.session_state["show_add_qs"] = True
 
     if st.session_state.get("show_add_qs"):
-        companies = api.get_companies()
+        with st.spinner("Loading companies…"):
+            companies = get_all_companies()
         co_options = {c["name"]: c["id"] for c in companies}
         with st.form("add_qs_form"):
             st.subheader("New Quantity Surveyor")
@@ -164,40 +161,43 @@ def show():
                 "phone": qs_phone or None,
                 "company_id": co_options.get(qs_company) if qs_company != "(None)" else None,
             })
+            st.cache_data.clear()
             st.session_state.pop("show_add_qs", None)
             st.rerun()
 
-    qss = api.get_qs_list(search=search)
+    with st.spinner("Loading…"):
+        all_qs = get_all_qs()
 
-    if not qss:
+    filtered = [q for q in all_qs if not search or search.lower() in q["name"].lower()]
+
+    if not filtered:
         st.info("No QS's found.")
         return
 
     rows = []
-    for q in qss:
+    for q in filtered:
         scores = q.get("scores", {})
         flags  = q.get("flags", [])
         wr     = q.get("win_rate")
         rows.append({
-            "_id":          q["id"],
-            "Name":         q["name"],
-            "Company":      q.get("company_name") or "—",
-            "Win Rate":     f"{wr*100:.0f}%" if wr is not None else "—",
-            "Total Jobs":   q.get("total_jobs", 0),
-            "Overall":      round(scores.get("overall_score") or 0, 1),
-            "Win Likelihood": round(scores.get("win_likelihood") or 0, 1),
-            "Relationship": round(scores.get("relationship_quality") or 0, 1),
-            "Flags":        " ".join(FLAG_INFO.get(f, ("", f, ""))[1] for f in flags) or "—",
+            "_id":             q["id"],
+            "Name":            q["name"],
+            "Company":         q.get("company_name") or "—",
+            "Win Rate":        f"{wr*100:.0f}%" if wr is not None else "—",
+            "Total Jobs":      q.get("total_jobs", 0),
+            "Overall":         round(scores.get("overall_score") or 0, 1),
+            "Win Likelihood":  round(scores.get("win_likelihood") or 0, 1),
+            "Relationship":    round(scores.get("relationship_quality") or 0, 1),
+            "Flags":           " ".join(FLAG_INFO.get(f, ("", f, ""))[1] for f in flags) or "—",
         })
 
-    df = pd.DataFrame(rows)
-    st.dataframe(df.drop(columns=["_id"]), use_container_width=True, height=400, hide_index=True)
+    st.caption(f"{len(filtered)} QS's")
+    st.dataframe(pd.DataFrame(rows).drop(columns=["_id"]), use_container_width=True, height=400, hide_index=True)
 
     st.divider()
-    st.subheader("View QS Detail")
-    qs_names = [q["name"] for q in qss]
+    qs_names = [q["name"] for q in filtered]
     selected_name = st.selectbox("Select QS", qs_names, label_visibility="collapsed")
     if st.button("Open QS Detail →"):
-        selected = next(q for q in qss if q["name"] == selected_name)
+        selected = next(q for q in filtered if q["name"] == selected_name)
         st.session_state["selected_qs_id"] = selected["id"]
         st.rerun()

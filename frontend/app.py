@@ -81,6 +81,22 @@ with st.sidebar:
             st.session_state["page"] = page_key
             st.rerun()
 
+    st.divider()
+
+    # ── Global year filter ─────────────────────────────────────────────────
+    import datetime
+    current_year = datetime.date.today().year
+    year_options = ["All Time"] + [str(y) for y in range(current_year, current_year - 6, -1)]
+    selected_year = st.selectbox(
+        "📅 Year",
+        year_options,
+        index=year_options.index(st.session_state.get("selected_year", "All Time")),
+        key="year_filter_widget",
+    )
+    if selected_year != st.session_state.get("selected_year"):
+        st.session_state["selected_year"] = selected_year
+        st.rerun()
+
 # ── Route to current page ──────────────────────────────────────────────────────
 page_key = st.session_state.get("page", "home")
 if page_key not in PAGES:

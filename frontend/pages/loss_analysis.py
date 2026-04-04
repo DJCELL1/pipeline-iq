@@ -1,47 +1,24 @@
 """
 Loss Analysis page — why we're losing, who we lose with most, trends.
 """
-import datetime
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 from utils.auth import require_auth
-from utils import api_client as api
-
-
-@st.cache_data(ttl=120, show_spinner=False)
-def _load_all_jobs():
-    return api.get_jobs()
-
-
-@st.cache_data(ttl=120, show_spinner=False)
-def _load_qs():
-    return api.get_qs_list()
+from utils.data import get_all_jobs, get_all_qs, in_year, WON_STATUSES
 
 
 def show():
     require_auth()
+    year = st.session_state.get("selected_year", "All Time")
     st.title("Loss Analysis")
-    st.caption("Understanding why we lose and where to improve")
-
-    # ── Year filter ───────────────────────────────────────────────────────────
-    current_year = datetime.date.today().year
-    year_options = ["All Time"] + [str(y) for y in range(current_year, current_year - 6, -1)]
-    selected_year = st.selectbox("Filter by Year", year_options, index=0,
-                                 label_visibility="collapsed", key="loss_year_filter")
-
-    def in_year(date_str):
-        if selected_year == "All Time":
-            return True
-        return (date_str or "").startswith(selected_year)
-
-    st.divider()
+    st.caption(f"Understanding why we lose and where to improve" + (f" — **{year}**" if year != "All Time" else ""))
 
     # ── Load data once ────────────────────────────────────────────────────────
-    with st.spinner("Loading data…"):
-        all_jobs = _load_all_jobs()
-        all_qs   = _load_qs()
+    with st.spinner("Loading…"):
+        all_jobs = get_all_jobs()
+        all_qs   = get_all_qs()
 
     # Split into won / lost filtered by year
     WON_STATUSES = {"won", "in_delivery", "invoiced", "complete"}

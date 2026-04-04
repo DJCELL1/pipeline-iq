@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 from utils.auth import require_auth
 from utils import api_client as api
+from utils.data import get_all_companies
 
 FLAG_BADGE = {
     "loyal":        "🟢 Loyal",
@@ -36,26 +37,31 @@ def show():
             c_name = st.text_input("Name")
             c_seg  = st.selectbox("Segment", ["Commercial", "Residential", "Industrial", "Other", ""])
             ok = st.form_submit_button("Create")
-        if ok:
-            if c_name:
-                result = api.create_company(c_name, c_seg)
-                if result:
-                    st.success(f"Created {c_name}")
-                    st.session_state.pop("show_add_company", None)
-                    st.rerun()
+        if ok and c_name:
+            result = api.create_company(c_name, c_seg)
+            if result:
+                st.success(f"Created {c_name}")
+                st.cache_data.clear()
+                st.session_state.pop("show_add_company", None)
+                st.rerun()
 
-    companies = api.get_companies(
-        search=search,
-        segment="" if segment == "All" else segment,
-    )
+    with st.spinner("Loading…"):
+        companies = get_all_companies()
 
-    if not companies:
+    # Filter client-side
+    seg_filter = "" if segment == "All" else segment
+    filtered = [
+        c for c in companies
+        if (not search or search.lower() in c["name"].lower())
+        and (not seg_filter or (c.get("segment") or "") == seg_filter)
+    ]
+
+    if not filtered:
         st.info("No companies found.")
         return
 
-    # Build display table
     rows = []
-    for c in companies:
+    for c in filtered:
         scores = c.get("scores", {})
         flags  = c.get("flags", [])
         rows.append({
@@ -71,20 +77,15 @@ def show():
         })
 
     df = pd.DataFrame(rows)
-
-    st.dataframe(
-        df.drop(columns=["_id"]),
-        use_container_width=True,
-        height=450,
-        hide_index=True,
-    )
+    st.caption(f"{len(filtered)} companies")
+    st.dataframe(df.drop(columns=["_id"]), use_container_width=True, height=450, hide_index=True)
 
     st.divider()
     st.subheader("View Company Detail")
-    company_names = [c["name"] for c in companies]
+    company_names = [c["name"] for c in filtered]
     selected_name = st.selectbox("Select company", company_names, label_visibility="collapsed")
     if st.button("Open Detail →", use_container_width=False):
-        selected = next(c for c in companies if c["name"] == selected_name)
+        selected = next(c for c in filtered if c["name"] == selected_name)
         st.session_state["selected_company_id"] = selected["id"]
         st.session_state["page"] = "company_detail"
         st.rerun()
