@@ -14,6 +14,22 @@ def show():
     st.title("Loss Analysis")
     st.caption("Understanding why we lose and where to improve")
 
+    # ── Year filter ───────────────────────────────────────────────────────────
+    import datetime
+    current_year = datetime.date.today().year
+    available_years = list(range(current_year, current_year - 6, -1))  # last 6 years
+    year_options = ["All Time"] + [str(y) for y in available_years]
+
+    selected_year = st.selectbox("Filter by Year", year_options, index=0, label_visibility="collapsed",
+                                  key="loss_year_filter")
+
+    def in_year(date_str):
+        if selected_year == "All Time":
+            return True
+        return (date_str or "").startswith(selected_year)
+
+    st.divider()
+
     col1, col2 = st.columns(2)
 
     # ── Loss Reasons Breakdown ────────────────────────────────────────────────
@@ -21,20 +37,32 @@ def show():
         st.subheader("Loss Reasons")
         reasons = api.get_loss_reasons()
         if reasons:
-            df = pd.DataFrame(reasons)
-            fig = px.pie(df, names="reason", values="count",
-                         color_discrete_sequence=px.colors.qualitative.Set3)
-            fig.update_layout(height=340, margin=dict(t=10, b=10, l=0, r=0))
-            st.plotly_chart(fig, use_container_width=True)
+            # filter by year client-side
+            all_lost = api.get_jobs(status="lost")
+            filtered_lost = [j for j in all_lost if in_year((j.get("quote_date") or "")[:4])]
+            reason_counts = {}
+            for j in filtered_lost:
+                r = j.get("loss_reason") or "Not specified"
+                reason_counts[r] = reason_counts.get(r, 0) + 1
+            if reason_counts:
+                df = pd.DataFrame([{"reason": k, "count": v} for k, v in reason_counts.items()])
+                fig = px.pie(df, names="reason", values="count",
+                             color_discrete_sequence=px.colors.qualitative.Set3)
+                fig.update_layout(height=340, margin=dict(t=10, b=10, l=0, r=0))
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No lost jobs for selected year.")
         else:
             st.info("No lost jobs yet.")
 
     # ── Win/Loss by Month ─────────────────────────────────────────────────────
     with col2:
-        st.subheader("Win vs Loss Trend")
+        st.subheader("Win vs Loss Trend (Count)")
         wl_data = api.get_win_loss_by_month()
         if wl_data:
             df = pd.DataFrame(wl_data)
+            if selected_year != "All Time":
+                df = df[df["month"].str.startswith(selected_year)]
             fig = go.Figure()
             fig.add_scatter(name="Won",  x=df["month"], y=df["won"],  mode="lines+markers",
                             line=dict(color="#2ecc71", width=2))
@@ -53,7 +81,7 @@ def show():
         value_by_month = {}
         for j in all_jobs_combined:
             date_str = (j.get("quote_date") or "")[:7]  # YYYY-MM
-            if not date_str:
+            if not date_str or not in_year(date_str[:4]):
                 continue
             val = j.get("quote_value") or 0
             status = j.get("status", "")
@@ -87,7 +115,8 @@ def show():
 
     # ── Companies we lose most with ───────────────────────────────────────────
     st.subheader("Companies — Loss Analysis")
-    all_jobs = api.get_jobs(status="lost")
+    all_jobs = [j for j in api.get_jobs(status="lost")
+                if in_year((j.get("quote_date") or "")[:4])]
     if all_jobs:
         company_losses = {}
         company_loss_value = {}
